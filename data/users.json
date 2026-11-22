@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "pbkdf2_sha256$200000$44b56571a1eefe9248dfdcfc15ad2c04$e4519cfa22711941707295fac42118aa03db879d4a44b42525e35053a84ce939",
+    "email": "",
+    "isAdmin": true,
+    "isBanned": false,
+    "createdAt": "2026-10-03T20:40:48.061600"
+  }
+]
