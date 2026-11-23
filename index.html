@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WeCode Online Judge</title>
+    <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+    <div id="app">
+        <nav class="navbar">
+            <div class="logo">
+                <span class="logo-icon" id="logoIcon"></span>
+                <span class="logo-text">WeCode OJ</span>
+            </div>
+            <div class="nav-actions" id="navActions"></div>
+        </nav>
+
+        <main id="pageContainer">
+            <section class="page" id="page-login" data-page="login">
+                <div class="auth-card">
+                    <h2>欢迎回来</h2>
+                    <p class="sub">登录以继续刷题之旅</p>
+                    <div id="loginMsg" class="auth-msg"></div>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="loginUsername">用户名</label>
+                            <input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">密码</label>
+                            <input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password" required />
+                        </div>
+                        <button type="submit" class="btn btn-primary">登 录</button>
+                    </form>
+                    <div class="switch">
+                        还没有账号？ <a id="gotoRegister" href="#/register">立即注册 →</a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="page" id="page-register" data-page="register">
+                <div class="auth-card">
+                    <h2>加入 WeCode</h2>
+                    <p class="sub">注册账号，开始你的编程挑战</p>
+                    <div id="registerMsg" class="auth-msg"></div>
+                    <form id="registerForm">
+                        <div class="form-group">
+                            <label for="regUsername">用户名</label>
+                            <input type="text" id="regUsername" placeholder="至少 2 个字符" autocomplete="username" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="regPassword">密码</label>
+                            <input type="password" id="regPassword" placeholder="至少 4 个字符" autocomplete="new-password" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="regEmail">邮箱（可选）</label>
+                            <input type="email" id="regEmail" placeholder="example@email.com" autocomplete="email" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">注 册</button>
+                    </form>
+                    <div class="switch">
+                        已有账号？ <a id="gotoLogin" href="#/login">返回登录 →</a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="page" id="page-problems" data-page="problems">
+                <div class="toolbar">
+                    <div class="search-box">
+                        <span class="icon-placeholder" id="searchIcon"></span>
+                        <input type="text" id="searchInput" placeholder="搜索题目..." />
+                    </div>
+                    <div class="filter-group">
+                        <select id="filterDifficulty">
+                            <option value="">全部难度</option>
+                        </select>
+                        <select id="filterCategory">
+                            <option value="">全部分类</option>
+                        </select>
+                    </div>
+                    <span class="stats-badge" id="problemCount">共 0 题</span>
+                </div>
+                <div class="problem-grid" id="problemGrid"></div>
+            </section>
+
+            <section class="page" id="page-detail" data-page="detail">
+                <div class="detail-container" id="detailContainer"></div>
+            </section>
+
+            <section class="page" id="page-submissions" data-page="submissions">
+                <div class="page-header">
+                    <h2>提交记录</h2>
+                    <button class="btn btn-outline btn-sm" id="refreshSubmissions">
+                        <img src="assets/icons/icon-refresh.svg" alt="" class="btn-icon" />
+                        刷新
+                    </button>
+                </div>
+                <div class="submission-table-wrap" id="submissionTableWrap"></div>
+            </section>
+
+            <section class="page" id="page-profile" data-page="profile">
+                <div class="page-header">
+                    <h2>我的进度</h2>
+                    <span id="profileUsername" class="stats-badge"></span>
+                </div>
+                <div class="stats-grid" id="statsGrid"></div>
+                <div class="card">
+                    <h4>最近提交</h4>
+                    <div id="recentSubmissions"></div>
+                </div>
+            </section>
+        </main>
+
+        <div id="toastContainer" class="toast-container"></div>
+        <div id="modalRoot"></div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
