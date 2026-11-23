@@ -1,0 +1,9 @@
+{
+  "port": 8000,
+  "gpp": "D:\\msys64\\ucrt64\\bin\\g++.exe",
+  "python": "C:\\Users\\iamgx\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+  "admin": {
+    "username": "admin",
+    "password": ""
+  }
+}
