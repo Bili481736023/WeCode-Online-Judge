@@ -386,7 +386,7 @@ problems/Q0001/testcases/1.out
 * 单文件、易部署
 * 不依赖数据库
 * 不依赖 Docker / WSL
-* 适合 Windows 10 局域网小规模使用
+* 适合**局域网**小规模使用
 
 因此没有实现：
 
@@ -397,4 +397,18 @@ problems/Q0001/testcases/1.out
 * HTTPS 证书管理
 
 这些属于后续版本或部署层需要解决的问题。
+
+## 协议
+
+本项目使用双协议，MPL-2.0(Mozilla Public License Version 2.0)控制代码部分，CC BY-NC-ND 4.0控制assets文件夹中的文件(包括但不限于图片，视频，音频等)
+
+## 鸣谢
+
+作者：`@Github Bili481736023`
+
+
+
+
+
+
 
