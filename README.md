@@ -1,400 +1,441 @@
-# WeCode Online Judge (WOJ)
+# WeCode Online Judge
 
-一个面向**局域网**的轻量级 Online Judge，单文件 Python 实现，尽量不引入额外运行环境，适合学校机房、社团、小团队内部使用。
+一个**零外部依赖**的轻量级 Online Judge（在线评测）系统，专为小范围自用场景设计：
 
-> 重要：本项目\*\*没有真正的代码沙箱\*\*，只适合\*\*可信局域网\*\*。不要直接暴露到公网。
+- 后端是**单个 Python 脚本**（`judge_server.py`），只用标准库，无需 pip install
+- 前端是**纯原生 HTML / CSS / JavaScript**，无框架、无构建、无 CDN
+- 题库就是一个个文件夹，`meta.json` + `testcases/`，用记事本就能建题
+- 适合班级作业、社团练习、个人刷题等局域网 / 单机场景
 
-\---
+> ⚠️ 本项目面向**可信小环境**（如校内局域网）设计，未做沙箱隔离——
+> 提交的代码会**以服务器本机权限直接运行**，请勿在公网或不可信环境开放使用。
 
-## 功能
+---
 
-* 用户注册 / 登录 / 登出（Cookie + Token）
-* 密码使用 PBKDF2-SHA256 哈希存储
-* 题目列表、题目详情、标签分类
-* 提交代码并判题
-* 支持语言：
+## 目录
 
-  * C++（g++，C++14，`-O2`）
-  * Python（可选，配置 Python 解释器后可用）
-* 管理员功能：
+1. [功能一览](#1-功能一览)
+2. [技术栈](#2-技术栈)
+3. [快速开始](#3-快速开始)
+4. [配置向导详解](#4-配置向导详解)
+5. [目录结构](#5-目录结构)
+6. [题目格式](#6-题目格式)
+7. [数据文件](#7-数据文件)
+8. [前端架构](#8-前端架构)
+9. [API 一览](#9-api-一览)
+10. [判题流程](#10-判题流程)
+11. [安全设计](#11-安全设计)
+12. [阈值与限制速查](#12-阈值与限制速查)
+13. [常见问题](#13-常见问题)
+14. [已知的不一致与改进方向](#14-已知的不一致与改进方向)
+15. [免责声明](#15-免责声明)
+16. [许可证](#16-许可证)
 
-  * 创建用户
-  * 封禁 / 解封用户
-  * 创建 / 删除题目
-  * 添加 / 删除标签
-* 提交记录查询（支持分页参数）
-* 判题日志 `logs/judge.log`，超过 5MB 自动轮转
-* 首次启动配置向导
-* 数据文件损坏自动备份 `.corrupt-\*`，避免被静默覆盖
+---
 
-\---
+## 1. 功能一览
 
-## 环境要求
+**前台（学生端，`index.html`）**
 
-* Windows 10 20H2 及以上（64 位）
-* Python 3.10+（测试过 3.10 / 3.11 / 3.12）
-* C++ 判题需要 g++（MinGW / Dev-Cpp 均可）
-* Python 判题需要额外配置一个 Python 解释器
-* 工作目录必须放在 **NTFS 磁盘**上，不要放在 FAT32/exFAT 的 U 盘或只读目录
+- 登录 / 注册 / 自动会话恢复
+- 题目列表：按分类、难度、标签筛选，关键词搜索
+- 题目详情：题面、样例、在线编辑器（C++ / Python）、直接提交并实时看结果
+- 提交记录：分页查看历史提交与判题详情，可一键恢复上次代码
+- 个人中心：查看 / 修改个人信息
 
-\---
+**后台（管理端，`back_platform.html`）**
 
-## 快速开始
+- 用户管理：查看用户列表、创建账号、封禁 / 解封
+- 题目管理：在线建题（题面 + 测试点）、删除题目
+- 标签管理：添加 / 删除标签，删除时自动清理题目引用
 
-### 1\. 安装运行环境
+**判题（后端内置）**
 
-安装 Python 3.10+，并确保命令行可用：
+- 支持 C++（g++，`-std=c++14 -O2`）与 Python（`python -I -S`）
+- 逐测试点评测：答案比对忽略行尾空白与末尾空行
+- 时间限制、输出限制（1MB）、进程树清理全部内置
 
-```powershell
-python --version
+---
+
+## 2. 技术栈
+
+| 层 | 选型 | 说明 |
+|---|---|---|
+| 后端 | Python 3.10+ 标准库 | `http.server.ThreadingHTTPServer` + 自写路由，零第三方依赖 |
+| 前端 | 原生 HTML / CSS / JS | ES Modules，Hash 路由，无框架无构建 |
+| 存储 | JSON 文件 | `data/*.json` + `problems/*/meta.json`，原子写入（tmp + os.replace） |
+| 编译器 | g++ | 自动探测 PATH、Dev-C++ 目录与注册表 |
+| 解释器 | Python | 自动探测 PATH 与常见安装位置 |
+| 认证 | PBKDF2-SHA256 + Cookie | 200,000 轮加盐哈希；HttpOnly + SameSite=Lax 会话令牌 |
+
+---
+
+## 3. 快速开始
+
+### 环境要求
+
+| 组件 | 要求 |
+|---|---|
+| Python | 3.10 及以上（仅标准库） |
+| g++ | 可选——不配置则 C++ 判题不可用 |
+| 操作系统 | Windows / Linux / macOS 均可（判题子进程管理两端都做了适配） |
+
+### 启动
+
+```bash
+cd WeCode_Online_Judge
+python judge_server.py
 ```
 
-安装 MinGW / Dev-Cpp，并确保 `g++.exe` 在 `PATH` 中，或首次启动时手动填写完整路径：
+首次运行会进入**配置向导**（见下一节），完成后：
 
-```powershell
-g++ --version
+- 服务地址：<http://127.0.0.1:8000>（端口以向导为准）
+- 局域网地址：启动时打印真实本机 IP，如 `http://192.168.1.10:8000`
+- 学生端：<http://…/index.html>，管理后台：<http://…/back_platform.html>
+
+> 监听地址固定为 `0.0.0.0`，同一局域网内的设备可直接访问。
+> 停止服务：`Ctrl + C`。
+
+---
+
+## 4. 配置向导详解
+
+首次启动（或 `config.json` 缺失 / 不完整时）会依次询问 5 项，全部可直接回车用默认值：
+
+| 步骤 | 项 | 默认值 | 说明 |
+|---|---|---|---|
+| 1/5 | 服务端口 | `8000` | 1–65535，非法输入回落 8000 |
+| 2/5 | g++ 路径 | 自动探测 | 探测顺序：PATH → Dev-C++ 常见安装目录 → 注册表 |
+| 3/5 | Python 路径 | 自动探测 | 探测顺序：PATH → 常见安装目录 |
+| 4/5 | 管理员用户名 | `admin` | |
+| 5/5 | 管理员密码 | `admin123` | ⚠️ 建议务必改成强密码 |
+
+配置写入 `config.json`。管理员密码在首次初始化时会哈希入库，随后**从 config.json 中清除明文**。g++ 与 Python 至少要配置一个，否则启动报错退出。
+
+想重跑向导：删除 `config.json` 再启动即可。
+
+---
+
+## 5. 目录结构
+
 ```
-
-### 2\. 启动
-
-```powershell
-python judge\_server.py
-```
-
-首次启动会进入配置向导，依次填写：
-
-1. 服务端口（默认 8000）
-2. g++ 路径
-3. Python 路径（可留空）
-4. 管理员用户名（默认 admin）
-5. 管理员密码（默认 admin123，建议修改）
-
-配置会写入 `config.json`。第一次启动后，`config.json` 中的明文管理员密码会被清除。
-
-### 3\. 访问
-
-浏览器打开：
-
-```text
-http://127.0.0.1:8000
-```
-
-局域网其他机器访问：
-
-```text
-http://<服务器局域网IP>:8000
-```
-
-\---
-
-## 目录结构
-
-```text
-.
-├── judge\_server.py          # 主程序
-├── config.json              # 首次启动生成
-├── data/
-│   ├── users.json           # 用户数据
-│   ├── submissions.json     # 提交记录
-│   ├── tags.json            # 标签
-│   └── tokens.json          # 登录 Token
-├── problems/
-│   └── Q0001/
-│       ├── meta.json
-│       └── testcases/
-│           ├── 1.in
-│           ├── 1.out
-│           ├── 2.in
-│           └── 2.out
-├── logs/
-│   └── judge.log            # 判题日志，超过 5MB 轮转为 judge.log.1
-├── index.html
-├── back\_platform.html
+WeCode_Online_Judge/
+├── judge_server.py        # 后端全部：HTTP 服务 + 判题核心（单文件）
+├── index.html             # 学生端入口（单页，Hash 路由）
+├── back_platform.html     # 管理后台入口
+├── run.bat                # (可选) Windows 一键启动
+│
 ├── css/
+│   ├── main.css           # 入口：@import 其余分层样式
+│   ├── base.css           # 变量、Reset、字体
+│   ├── layout.css         # 导航栏、页面容器布局
+│   ├── components.css     # 按钮、表单、卡片等通用组件
+│   ├── pages.css          # 各业务页面样式
+│   └── admin.css          # 管理后台专用（侧边栏、面板）
+│
 ├── js/
-└── assets/
+│   ├── main.js            # 学生端启动：恢复会话 → 渲染导航 → 初始化路由
+│   ├── admin-main.js      # 管理端启动
+│   ├── config.js          # 前端常量（API_BASE、默认代码模板）
+│   ├── api.js             # fetch 封装：统一 JSON / 错误 / Cookie
+│   ├── store.js           # 极简全局状态（当前用户）
+│   ├── router.js          # Hash 路由 + 登录守卫
+│   ├── ui.js              # 导航栏渲染
+│   ├── utils.js           # escapeHtml 等工具
+│   └── pages/
+│       ├── auth.js        # 登录 / 注册
+│       ├── problems.js    # 题目列表
+│       ├── detail.js      # 题目详情 + 代码编辑器 + 提交
+│       ├── submissions.js # 提交记录
+│       ├── profile.js     # 个人中心
+│       └── admin.js       # 后台三个面板（用户/题目/标签）
+│
+├── assets/icons/          # 内置 SVG 图标（自绘，无外部字体/图标库）
+│
+├── problems/              # 题库（首次启动自动创建）
+│   └── Q0001/
+│       ├── meta.json      # 题面元数据
+│       └── testcases/     # 测试点：1.in / 1.out、2.in / 2.out …
+│
+├── data/                  # 运行数据（自动创建）
+│   ├── users.json         # 用户（密码为 PBKDF2 哈希）
+│   ├── submissions.json   # 提交记录
+│   ├── tags.json          # 标签池
+│   └── tokens.json        # 会话令牌
+│
+├── logs/
+│   └── judge.log          # 判题日志（5MB 自动轮转）
+│
+└── config.json            # 服务配置（向导生成；含管理员明文密码时会被自动清除）
 ```
 
-\---
+---
 
-## 题目格式
+## 6. 题目格式
 
-题目目录名建议使用 `Q0001`、`Q0002` 这种格式，也兼容 `1`、`Q1`，但同时存在多个同 ID 目录时只会确定性命中一个。
+每道题是 `problems/` 下一个目录，目录名形如 `Q0001`（也兼容 `1`、`q1` 等写法，编号即题目 ID）。目录里必须有 `meta.json`，测试点放在 `testcases/` 子目录。
 
-`meta.json` 示例：
+### meta.json 字段
 
 ```json
 {
   "title": "A+B Problem",
   "difficulty": "入门",
-  "category": "基础",
+  "category": "顺序结构",
   "description": "输入两个整数，输出它们的和。",
   "exampleInput": "1 2",
   "exampleOutput": "3",
-  "tags": \["模拟", "数学"],
+  "tags": ["模拟", "入门"],
   "timeLimit": 2000
 }
 ```
 
-测试点：
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `title` | 建议 | 题目标题，缺省显示「未命名题目」 |
+| `difficulty` | 否 | 难度文本，默认 `入门` |
+| `category` | 否 | 分类文本，默认 `未分类` |
+| `description` | 否 | 题面（纯文本，前端做 HTML 转义渲染） |
+| `exampleInput` / `exampleOutput` | 否 | 样例；仅作展示，**不参与判题** |
+| `tags` | 否 | 标签数组，建议从标签池中选 |
+| `timeLimit` | 否 | 单测试点时限（毫秒），自动夹取到 100–10000，默认 `2000` |
 
-```text
-problems/Q0001/testcases/1.in
-problems/Q0001/testcases/1.out
+### testcases/
+
+- 命名规则：`N.in` 配对 `N.out`（N 从 1 开始，按文件名排序依次评测）
+- 只有成对存在的 `.in/.out` 才会被评测；一题**至少要有一个测试点**，否则提交一律返回 System Error
+- 想多组数据？加 `2.in`/`2.out`、`3.in`/`3.out` 即可
+
+也可以不手动建文件，直接在管理后台「题目管理」里填表单创建（含逐个添加测试点）。
+
+---
+
+## 7. 数据文件
+
+全部位于 `data/`，均为 UTF-8 JSON，写入采用「临时文件 + 原子替换」，并由全局锁保护，多线程并发安全。
+
+| 文件 | 结构 | 说明 |
+|---|---|---|
+| `users.json` | 用户对象数组 | `id / username / password(哈希) / email / isAdmin / isBanned / createdAt` |
+| `submissions.json` | 提交对象数组 | `id / userId / problemId / problemTitle / code / language / status / detail / createdAt` |
+| `tags.json` | 字符串数组 | 标签池，首次初始化内置洛谷风格标签（模拟、DP、图论、数据结构…） |
+| `tokens.json` | 令牌 → `{userId, createdAt}` | 会话令牌，7 天过期自动清理 |
+
+容错：任一 JSON 解析失败时，会先把损坏文件备份为 `xxx.corrupt-时间戳` 再返回默认值，避免损坏文件被静默覆盖。
+
+---
+
+## 8. 前端架构
+
+两个独立入口，共享同一套模块：
+
+- **学生端**：`index.html` + `js/main.js` —— 路由页面为登录、注册、题目列表、题目详情、提交记录、个人中心
+- **管理端**：`back_platform.html` + `js/admin-main.js` —— 侧边栏切换用户 / 题目 / 标签三个面板，进入前校验管理员身份
+
+关键设计：
+
+- **Hash 路由**（`#/problems`、`#/problem/1`…）：`router.js` 统一分发，未登录访问受限页自动跳登录页
+- **ES Modules**：`<script type="module">`，浏览器原生加载，无需打包
+- **会话恢复**：`main.js` 启动时先请求 `/me`，Cookie 有效则直接进入已登录状态
+- **XSS 防护**：所有用户可控内容（用户名、题面、标签等）均经 `utils.js` 的 `escapeHtml` 转义后渲染
+- **零外部依赖**：无 CDN、无字体库、无图标库，全部资源本地自含，内网断网也能跑
+
+样式分层：`main.css` 作为入口按 `base → layout → components → pages` 顺序引入（管理端额外加 `admin.css`）。
+
+---
+
+## 9. API 一览
+
+所有接口同源访问（前端与后端部署在一起），请求体均为 JSON；除登录 / 注册外都需要有效的会话 Cookie（`woj_token`）。
+
+### 认证相关
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| POST | `/login` | 公开 | 登录，成功后种下 HttpOnly Cookie；IP 限流 30 次/5 分钟，同名连续错 5 次锁 5 分钟 |
+| POST | `/register` | 公开 | 注册；用户名 2–32 字符，密码 6–128 字符，邮箱可选；IP 限流 5 次/10 分钟 |
+| POST | `/logout` | 登录 | 注销（吊销令牌 + 清 Cookie） |
+| GET | `/me` | 登录 | 当前用户信息（不含密码字段） |
+
+### 业务相关
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/problems` | 公开 | 全部题目列表（实时扫描题库目录） |
+| GET | `/submissions?page=1&pageSize=100` | 登录 | 当前用户的提交记录，分页返回（默认 100 条/页，最大 200） |
+| GET | `/tags` | 公开 | 标签池 |
+| POST | `/submit` | 登录 | 提交代码并**同步返回判题结果**；用户限流 12 次/60 秒；代码 ≤ 50KB |
+| GET | `/users` | 管理员 | 用户列表（不含密码字段） |
+
+### 管理相关（均需管理员）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/create_user` | 创建用户（校验规则与注册一致） |
+| POST | `/toggle_ban` | 封禁 / 解封用户（不能操作管理员） |
+| POST | `/add_problem` | 创建题目（含测试点；题号自动分配为最大编号 + 1） |
+| POST | `/delete_problem` | 删除题目（先移入临时目录再清理，关联提交一并删除，失败可回滚） |
+| POST | `/add_tag` / `/delete_tag` | 标签增删（删除时自动清理所有题目的引用） |
+
+### 错误响应
+
+统一为 `{"error": "中文错误信息"}`，状态码含：`400 参数错误`、`401 未登录`、`403 权限不足/被封禁`、`404 不存在`、`413 请求体过大`、`429 触发限流`、`500 服务器内部错误`。
+
+---
+
+## 10. 判题流程
+
+```
+POST /submit
+  ├─ 鉴权（登录 + 未封禁）+ 用户级限流（12 次/分钟）
+  ├─ 参数校验（语言 / 代码非空 / ≤50KB / 题目存在）
+  ├─ 获取判题信号量（全局最多同时 2 个判题）
+  │    └─ 判题期间主动让出 HTTP 并发槽位，避免拖垮其他接口
+  ├─ judge_submission()
+  │    ├─ 检查 testcases/（无测试点直接 System Error，不浪费编译）
+  │    ├─ C++：g++ -O2 -std=c++14 -DONLINE_JUDGE 编译（限时 20s）
+  │    │       Python：python -I -S main.py
+  │    └─ 逐测试点运行：
+  │          超时        → Time Limit Exceeded
+  │          输出 > 1MB  → Output Limit Exceeded
+  │          返回码 ≠ 0  → Runtime Error（附 stderr 前 500 字符）
+  │          文本比对不符 → Wrong Answer（忽略行尾空白与末尾空行）
+  │          全部通过     → Accepted
+  ├─ 写入判题日志 logs/judge.log
+  ├─ 追加提交记录到 data/submissions.json
+  └─ 同步返回 {"status": "...", "detail": "..."}
 ```
 
-* `.in` 与 `.out` 必须同名配对
-* `timeLimit` 单位是毫秒，会被限制在 100 \~ 10000 之间
-* 代码长度上限 50KB
-* 单个测试点输出上限 1MB，超过会判 `Output Limit Exceeded`
+**受限子进程**：判题运行的代码工作目录为一次性临时目录，环境变量裁剪到最小集，超时 / 超输出时杀掉整个进程树（Windows `taskkill /T`；POSIX `setsid` + `killpg`），正常退出后也会兜底清理残留子进程。
 
-\---
+**状态值一览**：`Accepted` / `Wrong Answer` / `Compile Error` / `Runtime Error` / `Time Limit Exceeded` / `Output Limit Exceeded` / `System Error`。
 
-## 配置文件
+---
 
-`config.json` 示例：
+## 11. 安全设计
 
-```json
-{
-  "port": 8000,
-  "gpp": "C:\\\\MinGW\\\\bin\\\\g++.exe",
-  "python": "C:\\\\Python312\\\\python.exe",
-  "admin": {
-    "username": "admin",
-    "password": ""
-  }
-}
-```
+| 机制 | 实现 |
+|---|---|
+| 密码存储 | PBKDF2-SHA256，200,000 轮，每用户独立盐；旧明文密码在登录或启动时自动迁移 |
+| 会话 | 32 字节随机令牌，HttpOnly + SameSite=Lax + Path=/，7 天过期；登出即吊销 |
+| CSRF | 所有 POST 校验 `Origin` 与 `Host` 一致；CORS 预检仅对同源回写凭据头 |
+| 登录爆破 | 同用户名连错 5 次锁定 5 分钟；IP 级滑动窗口限流 |
+| 请求体 | 上限 512KB，非 UTF-8 / 非 JSON 对象直接拒绝 |
+| 路径穿越 | 静态服务白名单（仅 `index.html`、`back_platform.html`、`css/js/assets/`），拒绝 `..`，并做 realpath 归一化二次校验 |
+| 数据安全 | 全局锁 + 原子写；损坏 JSON 自动备份后重置 |
+| 异常兜底 | 处理器未捕获异常统一回 JSON 500，不中断连接 |
+| 判题隔离 | ⚠️ **无沙箱**——见文首免责声明；已做：最小环境变量、输出限制、进程树清理 |
 
-* `gpp` 和 `python` 至少配置一个，否则程序拒绝启动
-* `python` 可以为空，此时 Python 判题不可用
-* 初始化完成后 `admin.password` 会被清空
+---
 
-\---
+## 12. 阈值与限制速查
 
-## API 简表
+| 项 | 值 | 位置（judge_server.py 常量） |
+|---|---|---|
+| HTTP 并发请求数 | 32 | `MAX_CONCURRENT_REQUESTS` |
+| 同时判题数 | 2 | `JUDGE_SEMAPHORE` |
+| 单请求超时 | 30s | `REQUEST_TIMEOUT_SECONDS` |
+| 请求体上限 | 512KB | `MAX_BODY_BYTES` |
+| 提交代码上限 | 50KB | `/submit` 内联校验 |
+| 提交限流 | 12 次 / 60s / 用户 | `/submit` |
+| 注册限流 | 5 次 / 600s / IP | `/register` |
+| 登录限流 | 30 次 / 300s / IP | `/login` |
+| 登录失败锁定 | 错 5 次锁 300s / 用户名 | `LOGIN_FAILS` |
+| 单测试点时限 | 100–10000ms，默认 2000 | `clamp_time_limit` |
+| 编译超时 | 20s | 判题核心内联 |
+| 程序输出上限 | 1MB | `MAX_OUTPUT_BYTES` |
+| 会话有效期 | 7 天 | `TOKEN_TTL_DAYS` |
+| 判题日志轮转 | 5MB | `JUDGE_LOG_MAX_BYTES` |
+| 提交记录分页 | 默认 100，最大 200 | `SUBMISSIONS_PAGE_SIZE_*` |
+| 题目标签数 | ≤ 100 个/题 | `/add_problem` |
+| 标签长度 | ≤ 32 字符 | `/add_tag` |
 
-### GET
+---
 
-|路径|说明|
-|-|-|
-|`/me`|当前登录用户|
-|`/problems`|题目列表|
-|`/submissions?page=1\&pageSize=100`|当前用户提交记录|
-|`/tags`|标签列表|
-|`/users`|用户列表（仅管理员）|
+## 13. 常见问题
 
-`/submissions` 默认每页 100 条，最大 200 条，返回的是当前用户该页数据。
+**Q：启动后 C++ 提交全部 System Error「未配置 g++」？**
+A：向导时没检测到 g++。安装 MinGW / Dev-C++ 后，删除 `config.json` 重跑向导，或手动把 g++ 完整路径填进 `config.json` 的 `gpp` 字段。
 
-### POST
+**Q：想改端口 / 换编译器？**
+A：直接改 `config.json`（`port`、`gpp`、`python`），重启生效。
 
-所有 POST 请求体为 JSON。
+**Q：管理员密码忘了？**
+A：删除 `data/users.json` 会重建初始管理员（需要 `config.json` 里还有明文密码，或重跑向导）。更稳妥的方式是直接编辑 `users.json`：把对应管理员的 `password` 字段替换为新的明文密码，重启后系统会自动把它哈希化。
 
-|路径|说明|
-|-|-|
-|`/login`|登录|
-|`/register`|注册|
-|`/logout`|登出|
-|`/submit`|提交代码|
-|`/create\_user`|创建用户（管理员）|
-|`/toggle\_ban`|封禁/解封（管理员）|
-|`/add\_problem`|创建题目（管理员）|
-|`/delete\_problem`|删除题目（管理员）|
-|`/add\_tag`|添加标签（管理员）|
-|`/delete\_tag`|删除标签（管理员）|
+**Q：题目改了 meta 但页面没变化？**
+A：`/problems` 每次请求都实时扫描题库，刷新页面即可；浏览器侧若有缓存请强刷（Ctrl+F5）。
 
-提交示例：
+**Q：判题很慢 / 卡住别的页面？**
+A：判题全局最多 2 个并发且会让出 HTTP 槽位，正常不会互相拖垮。若仍慢，检查题目 `timeLimit` 是否被设得过大（上限 10s）。
 
-```json
-{
-  "problemId": 1,
-  "language": "cpp",
-  "code": "#include <iostream>\\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b;}"
-}
-```
+**Q：怎么备份？**
+A：拷贝 `problems/`、`data/`、`config.json` 三个位置即可完整还原。
 
-支持的 `language`：
+---
 
-* `cpp`
-* `c++`
-* `python`
-* `py`
+## 14. 已知的不一致与改进方向
 
-判题状态：
+如实记录当前版本的已知问题（有意保留、待后续决策）：
 
-* `Accepted`
-* `Wrong Answer`
-* `Compile Error`
-* `Runtime Error`
-* `Time Limit Exceeded`
-* `Output Limit Exceeded`
-* `System Error`
+1. **注册页密码提示与后端不一致**：前端提示「密码至少 4 个字符」并按 4 位校验，但后端实际要求 6–128 位。输入 4–5 位时前端放行、后端报错。
+2. **判题为同步模型**：`/submit` 会阻塞到判题结束才返回（已通过限并发 + 让出 HTTP 槽位缓解）。彻底解耦需改为「入队 + 前端轮询」。
+3. **`submissions.json` 单文件存储**：每次提交全量读写整个文件，数据量大后会变慢；前端依赖返回的 `code` 做「恢复上次代码」，故暂未裁剪字段。
+4. **无沙箱**：判题代码以服务本机权限运行，见免责声明。
+5. **可选项未做**：HTTP/1.1 keep-alive、题目元数据内存缓存、`-std=c++17` 等，按需再加。
 
-\---
+---
 
-## 安全边界与已知限制
+## 15. 免责声明
 
-**请务必阅读。**
+- 本软件按「现状」提供，不附带任何明示或暗示的担保。作者不对因使用本软件而产生的任何损失承担责任。
+- **判题不隔离**：提交的代码将以服务器进程的权限在宿主机上直接运行。请仅在与使用者互相可信的环境中部署（如教学内网），并自行承担由此带来的风险。
+- 请勿将本系统部署于公网或允许不可信第三方提交代码的环境。
 
-### 1\. 没有代码沙箱
+---
 
-用户提交的 C++ / Python 代码是在服务器本机直接运行的，可以：
+## 16. 许可证
 
-* 读取服务器上的任意文件
-* 访问网络
-* 写入临时目录或磁盘
-* 启动子进程
-* 尝试读取测试点、配置文件、用户数据
+本项目采用**按内容类型划分的双重许可**：
 
-当前只做了：
+### 源代码 —— MPL-2.0
 
-* 每个测试点独立工作目录
-* 运行超时
-* 输出大小限制
-* 进程树清理
+所有源代码文件（`.py`、`.js`、`.css`、`.html`）以
+**Mozilla Public License 2.0（MPL-2.0）** 发布。
 
-**无法阻止恶意代码。** 只能用于可信用户环境。
+- SPDX 标识：`MPL-2.0`
+- 全文：<https://www.mozilla.org/MPL/2.0/>
+- 要点：以**文件为单位**的 copyleft——你可以自由使用、修改、商用、再分发本项目代码；但**修改过的 MPL 文件本身**必须继续以 MPL-2.0 开源，新增的独立文件可以自选协议。
+- 建议在修改过的源文件头部保留以下声明（MPL-2.0 Exhibit A 模板）：
 
-### 2\. 仅适合局域网
+  ```
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+  ```
 
-* 默认监听 `0.0.0.0`
-* 默认 HTTP，没有 TLS
-* Token 通过 Cookie 明文传输
-* 没有 Secure Cookie（因为局域网 HTTP 会直接导致无法登录）
+### 文档与非代码素材 —— CC BY-NC-ND 4.0
 
-不要直接暴露到公网。如需公网使用，请在前面加 HTTPS 反向代理，并重新评估沙箱方案。
+README 及其他文档、`assets/` 下的 SVG 图标、示例题目文本等非代码素材，以
+**知识共享 署名-非商业性使用-禁止演绎 4.0 国际（CC BY-NC-ND 4.0）** 发布。
 
-### 3\. 存储是 JSON 文件
+- SPDX 标识：`CC-BY-NC-ND-4.0`
+- 全文：<https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode.zh>
+- 要点：
+  - **BY（署名）**：转载须注明出处与作者；
+  - **NC（非商业）**：不得用于商业目的；
+  - **ND（禁止演绎）**：可原样转载，但**不得修改后再分发**。
 
-* 数据量小、并发低时够用
-* 不适合大规模并发写入
-* 多进程/多实例同时运行会互相覆盖
-* 建议只运行一个实例
-* 定期备份 `data/` 目录
+> ⚠️ 注意二者的边界：MPL-2.0 允许修改和商用代码，而 CC BY-NC-ND 对文档/素材不允许改作与商用。若需要修改文档或用于商业场景，须另行获得授权。
+> 源代码注释与文档冲突时，以本节为准。
 
-### 4\. 资源限制不完整
+### 不属于授权范围的内容
 
-已实现：
+以下内容**不在上述许可授予范围内**，随仓库分发仅为运行示例 / 运行产物：
 
-* 运行超时
-* 1MB 输出上限
-* 进程树清理
-* 最大并发请求数 32
-* 请求超时 30 秒
+- `data/` 与 `logs/` 下的运行数据（含用户个人信息与提交代码）；
+- `config.json`（本地部署配置）；
+- 用户自己创建的题目内容与用户提交的代码，权利归其作者；
+- 系统中的 Python、g++ 等第三方工具链，各自遵循其自身许可证。
 
-未实现：
-
-* 内存上限
-* CPU 核心隔离
-* 磁盘配额
-* 注册表/文件系统隔离
-* Windows Job Object 级别限制
-
-恶意代码仍然可以占用大量内存或磁盘。
-
-### 5\. 限流是内存实现
-
-* 登录：单 IP 每 5 分钟 30 次
-* 注册：单 IP 每 10 分钟 5 次
-* 提交：单用户每分钟 12 次
-* 用户名登录失败：连续 5 次锁定 5 分钟
-
-限制在进程内存中，重启后清空。阈值需要在代码常量中调整。
-
-### 6\. 数据增长
-
-* `submissions.json` 会持续增长
-* `/submissions` 已支持分页，但文件本身不会自动归档
-* `judge.log` 超过 5MB 会轮转为 `judge.log.1`
-
-题目和用户量很大时，建议改用 SQLite 或外部数据库。
-
-### 7\. 其他
-
-* 没有邮箱验证、找回密码、修改密码功能
-* 管理员账号丢失时，程序会尝试根据 `config.json` 重建；如果配置里没有密码，会生成临时密码并打印在控制台
-* 删除题目会同时清理对应的提交记录
-* 标签删除会同步清理题目 `meta.json`，失败时会尝试回滚
-
-\---
-
-## 部署建议
-
-1. **不要用管理员账户运行本程序**
-建议创建一个专用的低权限 Windows 本地用户来运行。
-2. **工作目录放在 NTFS 磁盘**
-不要放在 FAT32/exFAT U 盘或只读目录。
-3. **限制防火墙来源**
-只允许局域网网段访问：
-
-```powershell
-   New-NetFirewallRule `
-     -DisplayName "WOJ 8000" `
-     -Direction Inbound `
-     -Protocol TCP `
-     -LocalPort 8000 `
-     -Action Allow `
-     -RemoteAddress LocalSubnet
-   ```
-
-4. **定期备份**
-
-```powershell
-   Compress-Archive -Path .\\data, .\\problems, .\\config.json `
-     -DestinationPath .\\backup-$(Get-Date -Format yyyyMMdd-HHmmss).zip
-   ```
-
-5. **不要让不可信用户提交代码**
-如果必须接受不可信代码，请改用 Docker / WSL / 独立低权限账号 / Windows Job Object 方案，当前版本不提供这些隔离。
-
-\---
-
-## 常见问题
-
-### Q: 启动提示未找到 g++ 或 Python？
-
-检查 `config.json` 中的路径，或删除 `config.json` 重新运行配置向导。
-
-### Q: Python 判题不可用？
-
-在 `config.json` 的 `python` 字段填写 `python.exe` 的完整路径，然后重启服务。
-
-### Q: 提交后一直是 System Error？
-
-检查：
-
-* `g++` / `python` 路径是否正确
-* 题目目录是否存在 `testcases/\*.in` 和 `\*.out`
-* 服务器控制台是否有异常输出
-
-\##常见问题
-
-### Q: 能不能公网部署？
-
-不建议。当前版本没有沙箱、没有 HTTPS、没有完整的资源隔离。公网部署前必须做安全加固。
-
-### Q: 为什么数据文件旁边出现 `.corrupt-\*`？
-
-说明原 JSON 文件解析失败，程序已自动备份损坏文件并继续运行。可以从备份中恢复数据。
-
-\---
-
-## 设计取舍
-
-本项目优先考虑：
-
-* 单文件、易部署
-* 不依赖数据库
-* 不依赖 Docker / WSL
-* 适合 Windows 10 局域网小规模使用
-
-因此没有实现：
-
-* 完整沙箱
-* 内存/CPU 硬限制
-* 分布式判题
-* 高并发数据库存储
-* HTTPS 证书管理
-
-这些属于后续版本或部署层需要解决的问题。
-
+「WeCode Online Judge」「WeCode OJ」名称及标识未作商标授权，未经许可不得用于暗示背书的场景。

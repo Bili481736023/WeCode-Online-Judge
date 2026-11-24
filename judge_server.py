@@ -11,7 +11,12 @@ WeCode Online Judge - 后端服务
 - CSRF：SameSite=Lax + Origin 校验
 - 并发：全局锁保护 JSON 读写
 - 日志：判题结果写入 logs/judge.log
-仅使用 Python 标准库，MIT 协议。
+仅使用 Python 标准库。
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+文档与非代码素材采用 CC BY-NC-ND 4.0，详见 README.md「许可证」一节。
 """
 
 import os
