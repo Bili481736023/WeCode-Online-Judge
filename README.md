@@ -1,6 +1,6 @@
 # WeCode Online Judge
 
-一个**零外部依赖**的轻量级 Online Judge（在线评测）系统，专为小范围自用场景设计：
+一款为**局域网**设计的**轻量**在线评判机，适用于**学校计算机实验室**、**社团**和**小型团队**：
 
 - 后端是**单个 Python 脚本**（`judge_server.py`），只用标准库，无需 pip install
 - 前端是**纯原生 HTML / CSS / JavaScript**，无框架、无构建、无 CDN
